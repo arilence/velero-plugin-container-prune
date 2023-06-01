@@ -12,7 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.19-bullseye AS build
+FROM golang:1.20-bullseye AS development
+ENV GOPROXY=https://proxy.golang.org
+RUN useradd --system --create-home --no-log-init --shell /bin/bash abc
+# USER abc
+# # Install development specific packages
+# RUN go install -v github.com/ramya-rao-a/go-outline@v0.0.0-20210608161538-9736a4bde949
+# RUN go install -v golang.org/x/tools/gopls@latest
+
+FROM golang:1.20-bullseye AS build
 ENV GOPROXY=https://proxy.golang.org
 WORKDIR /go/src/github.com/vmware-tanzu/velero-plugin-example
 COPY . .

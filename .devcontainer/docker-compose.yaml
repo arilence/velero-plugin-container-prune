@@ -1,0 +1,16 @@
+version: "3.7"
+services:
+  app:
+    build:
+      context: ../
+      dockerfile: ./Dockerfile
+      target: "development"
+    volumes:
+      - ../:/workdir
+    command: sleep infinity
+    # SYS_PTRACE and seccomp:unconfined are only required for debugging within
+    # the container. Feel free to comment these out if not needed.
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined

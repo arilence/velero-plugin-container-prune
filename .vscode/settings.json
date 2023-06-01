@@ -1,0 +1,10 @@
+{
+  "editor.formatOnSave": true,
+  "css.validate": false,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.quickSuggestions": {
+    "other": "on",
+    "comments": "on",
+    "strings": true
+  }
+}
