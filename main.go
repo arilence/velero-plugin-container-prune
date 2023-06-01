@@ -24,7 +24,7 @@ import (
 
 func main() {
 	framework.NewServer().
-		RegisterBackupItemActionV2("example.io/backup-pluginv2", newBackupPluginV2).
+		RegisterBackupItemActionV2("arilence.com/prune-containers-backup-plugin", newBackupPluginV2).
 		Serve()
 }
 
