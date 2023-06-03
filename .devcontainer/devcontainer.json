@@ -13,7 +13,7 @@
       "extensions": [
         "esbenp.prettier-vscode",
         "EditorConfig.EditorConfig",
-        "golang.Go"
+        "golang.go"
       ],
       "settings": {
         "terminal.integrated.profiles.linux": {

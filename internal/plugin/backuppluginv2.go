@@ -17,9 +17,13 @@ limitations under the License.
 package plugin
 
 import (
+	"strings"
+
 	"github.com/sirupsen/logrus"
 
+	corev1api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -34,7 +38,7 @@ const (
 	// This annotation is a CSV string.
 	// If this annotation is found on a backup resource, any container names
 	// matching a value inside the CSV will not be backed up.
-	AsyncBIAContainerPruneAnnotation	= "arilence.com/prune-containers"
+	AsyncBIAContainerPruneAnnotation	= "velero.arilence.com/prune-containers"
 )
 
 // BackupPluginV2 is a v2 backup item action plugin for Velero.
@@ -84,8 +88,6 @@ func GetClient() (*kubernetes.Clientset, error) {
 // Execute allows the ItemAction to perform arbitrary logic with the item being backed up,
 // in this case, setting a custom annotation on the item being backed up.
 func (p *BackupPluginV2) Execute(item runtime.Unstructured, backup *v1.Backup) (runtime.Unstructured, []velero.ResourceIdentifier, string, []velero.ResourceIdentifier, error) {
-	p.log.Info("Hello from pruneContainerBackupPlugin!")
-
 	metadata, err := meta.Accessor(item)
 	if err != nil {
 		return nil, nil, "", nil, err
@@ -102,8 +104,59 @@ func (p *BackupPluginV2) Execute(item runtime.Unstructured, backup *v1.Backup) (
 		return item, nil, "", nil, nil
 	}
 
-	// Not going to do anything just yet, so just return the item.
-	return item, nil, "", nil, nil
+	// Item doesn't have the prune annotation, so we ignore it and return the item
+	annotationValue, ok := annotations[AsyncBIAContainerPruneAnnotation]
+	if !ok {
+		return item, nil, "", nil, nil
+	}
+	var podsToPrune []string = strings.Split(annotationValue, ",")
+	p.log.Infof("Found annotation %s on pod", AsyncBIAContainerPruneAnnotation)
+
+	// Retrieve Pod spec
+	pod := new(corev1api.Pod)
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(item.UnstructuredContent(), pod); err != nil {
+		return nil, nil, "", nil, err
+	}
+
+	// Remove matching initContainers (if they exist)
+	if pod.Spec.InitContainers != nil {
+		for idx, c := range pod.Spec.InitContainers {
+			for _, v := range podsToPrune {
+				if c.Name == v {
+					p.log.Infof("Removed %s container from pod %s", v, pod.Name)
+					pod.Spec.InitContainers = append(pod.Spec.InitContainers[:idx], pod.Spec.InitContainers[idx+1:]...)
+				}
+			}
+		}
+	}
+
+	// Remove matching sidecar (if they exist)
+	if pod.Spec.Containers != nil {
+		for idx, c := range pod.Spec.Containers {
+			for _, v := range podsToPrune {
+				if c.Name == v {
+					p.log.Infof("Removed %s container from pod %s", v, pod.Name)
+					pod.Spec.Containers = append(pod.Spec.Containers[:idx], pod.Spec.Containers[idx+1:]...)
+				}
+			}
+		}
+		for idx, c := range pod.Spec.Volumes {
+			for _, v := range podsToPrune {
+				if c.Name == v {
+					p.log.Infof("Removed %s volume from pod %s", v, pod.Name)
+					pod.Spec.Volumes = append(pod.Spec.Volumes[:idx], pod.Spec.Volumes[idx+1:] ...)
+				}
+			}
+		}
+	}
+
+	// Return the new result
+	res, err := runtime.DefaultUnstructuredConverter.ToUnstructured(pod)
+	if err != nil {
+		p.log.Errorf("Error converting Pod back to unstructured schema")
+		return nil, nil, "", nil, err
+	}
+	return &unstructured.Unstructured{Object: res}, nil, "", nil, nil
 }
 
 func (p *BackupPluginV2) Progress(operationID string, backup *v1.Backup) (velero.OperationProgress, error) {
